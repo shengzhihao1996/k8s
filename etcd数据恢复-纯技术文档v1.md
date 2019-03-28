@@ -1,5 +1,11 @@
+- 注释： 
+- 1、 节点损毁包括：服务器宕机、工作目录下数据丢失误删除、服务报错无法启动等。
+- 2、 一下提供三个场景，如遇到真实状况，请选取其中之一，详细阅读操作流程以及说明，领会精神奥义之后，再付诸行动。
+- 3、 真实情况节点ip可能与本文不符，需要读者自行替换ip地址以模仿操作流程。
+
 # etcd单节点数据恢复
 ### 场景： 52损毁，53、54正常提供服务
+###### 一、删除etcd工作目录下所有内容，修改服务service文件。
 ~~~
 #登录52机器
 [root@kubernetes-1 ~]# ifconfig  eno1|awk 'NR==2'
@@ -17,7 +23,9 @@ inet 10.90.28.52  netmask 255.255.224.0  broadcast 10.90.31.255
 
 #reload  etcd服务
 [root@kubernetes-1 ~]# systemctl daemon-reload
-
+~~~
+###### 二、寻找一台完好的etcd机器，执行命令删除损毁etcd成员，将其重新加入集群，并依次重启剩余所有etcd机器上的etcd服务
+~~~
 #登录53机器
 [root@kubernetes-2 ~]# ifconfig  eno1|awk 'NR==2'
 inet 10.90.28.53  netmask 255.255.224.0  broadcast 10.90.31.255
@@ -50,7 +58,9 @@ inet 10.90.28.54  netmask 255.255.224.0  broadcast 10.90.31.255
 
 #重启etcd服务
 [root@kubernetes-3 ~]# systemctl restart etcd
-
+~~~
+###### 三、返回损毁的etcd机器，启动etcd服务，验证集群状态
+~~~
 #登录52机器
 [root@kubernetes-1 ~]# ifconfig  eno1|awk 'NR==2'
 inet 10.90.28.52  netmask 255.255.224.0  broadcast 10.90.31.255
@@ -66,7 +76,8 @@ member f96d4cc8ae8b232f is healthy: got healthy result from https://10.90.28.54:
 cluster is healthy
 ~~~
 # etcd集群增加节点
-### 52、53、54为正常提供服务的etcd集群，现需要补充一个etcd节点，节点ip为165
+### 场景： 52、53、54为正常提供服务的etcd集群，现需要补充一个etcd节点，节点ip为165
+###### 一、 寻找一台完好的etcd机器，执行命令增加一个etcd成员，基于新生成的ETCD_INITIAL_CLUSTER的值替换所有etcd的service文件中的initial-cluster的value，并重启所有etcd服务。
 ~~~
 #登录52机器
 [root@kubernetes-1 ~]# ifconfig  eno1|awk 'NR==2'
@@ -116,7 +127,9 @@ f96d4cc8ae8b232f, started, etcd3, https://10.90.28.54:2380, https://10.90.28.54:
 
 #重启etcd服务
 [root@kubernetes-3 ~]# systemctl daemon-reload  && systemctl restart etcd
-
+~~~
+###### 二、登录新的etcd机器，创建工作目录、秘钥目录，copy文件，创建证书，创建service文件，启动etcd服务，验证集群状态
+~~~
 #登录165机器
 [root@test-k8s-node1 ~]# ifconfig  eth0|awk 'NR==2'
         inet 10.90.24.165  netmask 255.255.224.0  broadcast 10.90.31.255
@@ -226,6 +239,8 @@ WantedBy=multi-user.target
 
 ~~~
 # etcd集群数据恢复
+### 场景： 原集群全部损毁，有备份文件，需要在新集群实现备份恢复。
+###### 一、拿到备份文件
 ~~~
 #登录52节点
 [root@kubernetes-1 clean]# ifconfig  eno1|awk 'NR==2'
@@ -236,7 +251,9 @@ Snapshot saved at snapshot.db
 [root@kubernetes-1 clean]# ll
 total 7216
 -rw-r--r-- 1 root root 7385120 Mar 27 18:55 snapshot.db
-
+~~~
+###### 二、关停所有etcd服务，删除所有etcd工作目录下的文件，复制备份文件至每个节点，依次执行备份恢复命令，生成新的目录，将其下的member考到etcd工作目录下，依次重启etcd服务。
+~~~
 #切换到新的etcd集群
 #查看集群状态
 [root@etcd1 ~]#  etcdctl --ca-file=/etc/kubernetes/ssl/ca.pem  --key-file=/etc/etcd/ssl/etcd-key.pem  --cert-file=/etc/etcd/ssl/etcd.pem  cluster-health
